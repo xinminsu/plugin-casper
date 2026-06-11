@@ -5,6 +5,7 @@ Core casper blockchain plugin for Eliza OS that provides essential services and 
 The casper plugin serves as a foundational component of Eliza OS, bridging casper blockchain capabilities with the Eliza ecosystem. It provides crucial services for token operations, trading, portfolio management, and DeFi integrations, enabling both automated and user-directed interactions with the casper blockchain.
 
 Features
+
 Token Operations
 
 Token Creation: Deploy new tokens with customizable metadata
