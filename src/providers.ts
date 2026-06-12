@@ -1,5 +1,5 @@
 import { IAgentRuntime, Memory, Provider, State, ProviderResult } from '@elizaos/core';
-import { CasperClient } from './client';
+import { createCasperClient, getCasperConfigFromRuntime } from './config';
 
 /**
  * Casper 网络信息 Provider
@@ -8,8 +8,8 @@ export const casperNetworkProvider: Provider = {
   name: 'casperNetwork',
   get: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<ProviderResult> => {
     try {
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const { nodeUrl } = getCasperConfigFromRuntime(runtime);
+      const client = createCasperClient(runtime);
       
       const latestBlock = await client.getLatestBlock();
       
@@ -41,8 +41,7 @@ export const casperWalletProvider: Provider = {
         };
       }
       
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const client = createCasperClient(runtime);
       
       const balance = await client.getBalance(publicKey as string);
       const balanceInCSPR = parseInt(balance) / 1000000000;

@@ -1,9 +1,18 @@
 import { CasperServiceByJsonRPC, DeployUtil, Keys, RuntimeArgs, CLPublicKey } from 'casper-js-sdk';
+import { HTTPTransport } from '@open-rpc/client-js';
 
 export interface CasperConfig {
   nodeUrl: string;
   chainName?: string;
-  apiKey?: string; // 可选的 API Key
+  apiKey?: string;
+}
+
+class AuthenticatedCasperRpcClient extends CasperServiceByJsonRPC {
+  constructor(url: string, headers: Record<string, string>) {
+    super(url);
+    const transport = new HTTPTransport(url, { headers });
+    this.client.requestManager.transports = [transport];
+  }
 }
 
 export interface WalletInfo {
@@ -18,15 +27,14 @@ export class CasperClient {
 
   constructor(config: CasperConfig) {
     this.config = config;
-    
-    // 如果提供了 API Key，需要创建自定义 provider
+
     if (config.apiKey) {
-      // 注意：casper-js-sdk 可能不直接支持自定义 headers
-      // 建议使用不需要认证的公共节点
-      console.warn('API Key support may require custom HTTP client configuration');
+      this.client = new AuthenticatedCasperRpcClient(config.nodeUrl, {
+        Authorization: config.apiKey,
+      });
+    } else {
+      this.client = new CasperServiceByJsonRPC(config.nodeUrl);
     }
-    
-    this.client = new CasperServiceByJsonRPC(config.nodeUrl);
   }
 
   /**

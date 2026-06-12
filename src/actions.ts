@@ -1,5 +1,5 @@
 import { Action, ActionExample, HandlerCallback, IAgentRuntime, Memory, State } from '@elizaos/core';
-import { CasperClient } from './client';
+import { createCasperClient } from './config';
 
 /**
  * 生成钱包 Action
@@ -19,8 +19,7 @@ export const generateWalletAction: Action = {
     callback?: HandlerCallback
   ) => {
     try {
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const client = createCasperClient(runtime);
       
       const wallet = client.generateWallet();
       
@@ -80,8 +79,7 @@ export const getBalanceAction: Action = {
     callback?: HandlerCallback
   ) => {
     try {
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const client = createCasperClient(runtime);
       
       // 从消息中提取公钥或地址
       const publicKey = extractPublicKey(message.content.text || '');
@@ -145,8 +143,7 @@ export const transferAction: Action = {
     callback?: HandlerCallback
   ) => {
     try {
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const client = createCasperClient(runtime);
       
       const privateKey = runtime.getSetting('CASPER_PRIVATE_KEY') as string;
       if (!privateKey) {
@@ -219,8 +216,7 @@ export const getDeployStatusAction: Action = {
     callback?: HandlerCallback
   ) => {
     try {
-      const nodeUrl = runtime.getSetting('CASPER_NODE_URL') as string || 'https://node.testnet.cspr.cloud:443';
-      const client = new CasperClient({ nodeUrl });
+      const client = createCasperClient(runtime);
       
       const deployHash = extractDeployHash(message.content.text || '');
       
