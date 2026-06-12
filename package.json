@@ -18,7 +18,7 @@
     "web3",
     "cryptocurrency"
   ],
-  "author": "Eliza Community",
+  "author": "casper Community",
   "license": "MIT",
   "dependencies": {
     "casper-js-sdk": "^2.15.4",
