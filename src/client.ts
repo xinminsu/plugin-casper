@@ -27,7 +27,10 @@ export class CasperClient {
     const keyPair = Keys.Ed25519.new();
     // publicKey 是 CLPublicKey 类型，使用 toHex() 方法
     const publicKeyHex = keyPair.publicKey.toHex(false); // false 表示不使用校验和
-    const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
+    // privateKey 是 Uint8Array，转换为 hex 字符串
+    const privateKeyHex = Array.from(keyPair.privateKey)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
     const accountHash = keyPair.accountHex(false);
     const address = `account-hash-${accountHash}`;
 
