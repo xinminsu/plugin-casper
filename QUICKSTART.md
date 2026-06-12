@@ -41,7 +41,7 @@ This will compile TypeScript files and generate JavaScript in the `dist/` direct
 ### Step 1: Import the Plugin
 
 ```typescript
-import { casperPlugin } from '@elizaos/plugin-casper';
+import { casperPlugin } from '@suxinmin/plugin-casper';
 ```
 
 ### Step 2: Add to Agent Configuration
