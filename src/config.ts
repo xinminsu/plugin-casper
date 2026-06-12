@@ -1,8 +1,8 @@
 import { IAgentRuntime } from '@elizaos/core';
 import { CasperClient, CasperConfig } from './client';
 
-/** Public testnet RPC endpoint that does not require an API key. */
-export const DEFAULT_CASPER_NODE_URL = 'https://rpc.testnet.cspr.cloud:443/rpc';
+/** Official Casper Association public testnet RPC (no API key required). */
+export const DEFAULT_CASPER_NODE_URL = 'https://node.testnet.casper.network/rpc';
 
 export function getCasperConfigFromRuntime(runtime: IAgentRuntime): CasperConfig {
   const nodeUrl =

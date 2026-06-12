@@ -21,6 +21,25 @@ export interface WalletInfo {
   address: string;
 }
 
+interface BlockHeader {
+  state_root_hash?: string;
+  timestamp?: string;
+  height?: number;
+}
+
+function extractBlockHeader(blockInfo: any): BlockHeader | null {
+  if (blockInfo?.block?.header) {
+    return blockInfo.block.header;
+  }
+
+  const version2Header = blockInfo?.block_with_signatures?.block?.Version2?.header;
+  if (version2Header) {
+    return version2Header;
+  }
+
+  return null;
+}
+
 export class CasperClient {
   private client: CasperServiceByJsonRPC;
   private config: CasperConfig;
@@ -271,10 +290,11 @@ export class CasperClient {
   async getLatestBlock(): Promise<any> {
     try {
       const blockInfo = await this.client.getLatestBlockInfo();
+      const header = extractBlockHeader(blockInfo);
       return {
-        stateRootHash: blockInfo.block?.header.state_root_hash,
-        timestamp: blockInfo.block?.header.timestamp,
-        height: blockInfo.block?.header.height
+        stateRootHash: header?.state_root_hash,
+        timestamp: header?.timestamp,
+        height: header?.height,
       };
     } catch (error) {
       console.error('Error getting latest block:', error);
@@ -287,6 +307,6 @@ export class CasperClient {
    */
   private async getStateRootHash(): Promise<string> {
     const blockInfo = await this.client.getLatestBlockInfo();
-    return blockInfo.block?.header.state_root_hash || '';
+    return extractBlockHeader(blockInfo)?.state_root_hash || '';
   }
 }
