@@ -25,13 +25,14 @@ export class CasperClient {
    */
   generateWallet(): WalletInfo {
     const keyPair = Keys.Ed25519.new();
-    const publicKeyHex = Buffer.from(keyPair.publicKey as any).toString('hex');
+    // publicKey 是 CLPublicKey 类型，使用 toHex() 方法
+    const publicKeyHex = keyPair.publicKey.toHex(false); // false 表示不使用校验和
     const privateKeyHex = Buffer.from(keyPair.privateKey).toString('hex');
-    const accountHash = Buffer.from(keyPair.accountHash()).toString('hex');
+    const accountHash = keyPair.accountHex(false);
     const address = `account-hash-${accountHash}`;
 
     return {
-      publicKey: `02${publicKeyHex}`,
+      publicKey: publicKeyHex,
       privateKey: privateKeyHex,
       address
     };
@@ -45,8 +46,8 @@ export class CasperClient {
     const publicKeyBytes = Keys.Ed25519.privateToPublicKey(privateKeyBytes);
     const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
     
-    const publicKey = `02${Buffer.from(keyPair.publicKey as any).toString('hex')}`;
-    const accountHash = Buffer.from(keyPair.accountHash()).toString('hex');
+    const publicKey = keyPair.publicKey.toHex(false);
+    const accountHash = keyPair.accountHex(false);
     const address = `account-hash-${accountHash}`;
 
     return {
