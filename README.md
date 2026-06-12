@@ -4,7 +4,6 @@ Casper blockchain plugin for Eliza AI agent framework. This plugin enables AI ag
 
 ## Features
 
-- 🏦 **Wallet Management**: Generate new wallets and restore existing ones
 - 💰 **Balance Queries**: Check CSPR token balances for any account
 - 💸 **Token Transfers**: Send CSPR tokens between accounts
 - 📊 **Transaction Status**: Monitor transaction status by deploy hash
@@ -51,20 +50,7 @@ const agent = new Agent({
 
 ### Available Actions
 
-#### 1. Generate Wallet
 
-Create a new Casper wallet with public/private key pair.
-
-**Example:**
-```
-User: Create a new Casper wallet
-Agent: I'll generate a new Casper wallet for you...
-
-📍 Address: account-hash-xxx
-🔑 Public Key: 02a1b2c3d4e5f6...
-🔐 Private Key: xxxxx
-
-⚠️ IMPORTANT: Store your private key securely! Never share it with anyone.
 ```
 
 #### 2. Check Balance
@@ -137,15 +123,6 @@ const client = new CasperClient({
 
 #### Methods
 
-##### `generateWallet(): WalletInfo`
-
-Generate a new wallet with key pair.
-
-```typescript
-const wallet = client.generateWallet();
-console.log(wallet.address);      // Account address
-console.log(wallet.publicKey);    // Public key
-console.log(wallet.privateKey);   // Private key
 ```
 
 ##### `getBalance(publicKey: string): Promise<string>`
