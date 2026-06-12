@@ -22,7 +22,10 @@ Add the following environment variables to your `.env` file:
 
 ```env
 # Casper Node URL (testnet or mainnet)
-CASPER_NODE_URL=https://node.testnet.cspr.cloud:443
+# 使用公共节点（无需 API Key）
+CASPER_NODE_URL=https://rpc.testnet.cspr.cloud:443/rpc
+# 或者使用其他公共节点
+# CASPER_NODE_URL=https://node.testnet.casperlabs.org:7777/rpc
 
 # Optional: Default wallet configuration
 CASPER_PUBLIC_KEY=your_public_key_here
@@ -31,8 +34,17 @@ CASPER_PRIVATE_KEY=your_private_key_here
 
 ### Network URLs
 
-- **Testnet**: `https://node.testnet.cspr.cloud:443`
-- **Mainnet**: `https://node.cspr.cloud:443`
+**Testnet 公共节点:**
+- `https://rpc.testnet.cspr.cloud:443/rpc` (推荐)
+- `https://node.testnet.casperlabs.org:7777/rpc`
+- `https://testnet.cspr.cloud:443/rpc`
+
+**Mainnet 公共节点:**
+- `https://rpc.cspr.cloud:443/rpc` (推荐)
+- `https://node.mainnet.casperlabs.org:7777/rpc`
+- `https://cspr.cloud:443/rpc`
+
+**注意:** 某些节点（如 `node.testnet.cspr.cloud`）可能需要 API Key。建议使用上面列出的公共 RPC 端点。
 
 ## Usage
 

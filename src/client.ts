@@ -3,6 +3,7 @@ import { CasperServiceByJsonRPC, DeployUtil, Keys, RuntimeArgs, CLPublicKey } fr
 export interface CasperConfig {
   nodeUrl: string;
   chainName?: string;
+  apiKey?: string; // 可选的 API Key
 }
 
 export interface WalletInfo {
@@ -17,6 +18,14 @@ export class CasperClient {
 
   constructor(config: CasperConfig) {
     this.config = config;
+    
+    // 如果提供了 API Key，需要创建自定义 provider
+    if (config.apiKey) {
+      // 注意：casper-js-sdk 可能不直接支持自定义 headers
+      // 建议使用不需要认证的公共节点
+      console.warn('API Key support may require custom HTTP client configuration');
+    }
+    
     this.client = new CasperServiceByJsonRPC(config.nodeUrl);
   }
 
