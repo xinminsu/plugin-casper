@@ -1,5 +1,6 @@
-import { CasperServiceByJsonRPC, DeployUtil, Keys, RuntimeArgs, CLPublicKey } from 'casper-js-sdk';
+import { CasperServiceByJsonRPC, DeployUtil, Keys, RuntimeArgs } from 'casper-js-sdk';
 import { HTTPTransport } from '@open-rpc/client-js';
+import { parseCasperPublicKey } from './utils';
 
 export interface CasperConfig {
   nodeUrl: string;
@@ -101,16 +102,14 @@ export class CasperClient {
    */
   async getBalance(publicKey: string): Promise<string> {
     try {
-      // 移除公钥前缀 (02 or 03)
-      const publicKeyHex = publicKey.startsWith('02') || publicKey.startsWith('03') 
-        ? publicKey.slice(2) 
-        : publicKey;
-      
-      const publicKeyBytes = Buffer.from(publicKeyHex, 'hex');
-      const clPublicKey = CLPublicKey.fromEd25519(publicKeyBytes);
+      const clPublicKey = parseCasperPublicKey(publicKey);
       
       // 获取状态根哈希
       const stateRootHash = await this.getStateRootHash();
+      
+      if (!stateRootHash) {
+        throw new Error('Failed to resolve Casper state root hash from latest block');
+      }
       
       // 获取账户余额 URef
       const balanceUref = await this.client.getAccountBalanceUrefByPublicKey(
@@ -144,11 +143,7 @@ export class CasperClient {
       const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
       
       // 构建目标公钥
-      const targetPublicKeyHex = toPublicKey.startsWith('02') || toPublicKey.startsWith('03')
-        ? toPublicKey.slice(2)
-        : toPublicKey;
-      const targetPublicKeyBytes = Buffer.from(targetPublicKeyHex, 'hex');
-      const targetCLPublicKey = CLPublicKey.fromEd25519(targetPublicKeyBytes);
+      const targetCLPublicKey = parseCasperPublicKey(toPublicKey);
       
       // 构建转账 session
       const session = DeployUtil.ExecutableDeployItem.newTransfer(

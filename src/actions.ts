@@ -1,5 +1,6 @@
 import { Action, ActionExample, HandlerCallback, IAgentRuntime, Memory, State } from '@elizaos/core';
 import { createCasperClient } from './config';
+import { extractPublicKey, safeJsonStringify, toSerializable } from './utils';
 
 /**
  * 生成钱包 Action
@@ -229,12 +230,13 @@ export const getDeployStatusAction: Action = {
       }
       
       const status = await client.getDeployStatus(deployHash);
+      const serializedStatus = toSerializable(status);
       
       callback!({
-        text: `📊 Transaction Status:\nDeploy Hash: ${deployHash}\nStatus: ${JSON.stringify(status, null, 2)}`,
+        text: `📊 Transaction Status:\nDeploy Hash: ${deployHash}\nStatus: ${safeJsonStringify(serializedStatus, 2)}`,
         content: {
           deployHash,
-          status
+          status: serializedStatus
         }
       });
     } catch (error) {
@@ -257,13 +259,6 @@ export const getDeployStatusAction: Action = {
     ]
   ]
 };
-
-// Helper functions
-function extractPublicKey(text: string): string | null {
-  // Match Casper public key pattern (hex string starting with 02 or 03)
-  const match = text.match(/0[2-3][0-9a-fA-F]{64}/);
-  return match ? match[0] : null;
-}
 
 function extractDeployHash(text: string): string | null {
   // Match deploy hash pattern (hex string)
