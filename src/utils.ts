@@ -17,7 +17,28 @@ export function parseCasperPublicKey(publicKey: string): CLPublicKey {
     );
   }
 
-  return CLPublicKey.fromHex(trimmed);
+  // Handle different public key formats
+  let hexKey = trimmed;
+  
+  // If it's already a tagged hex (starts with 01, 02, or 03), use as-is
+  if (/^0[1-3][0-9a-fA-F]{64}$/.test(hexKey)) {
+    return CLPublicKey.fromHex(hexKey);
+  }
+  
+  // If it's a 64-character hex without tag, assume Ed25519 (tag 02)
+  if (/^[0-9a-fA-F]{64}$/.test(hexKey)) {
+    return CLPublicKey.fromHex(`02${hexKey}`);
+  }
+  
+  // Try to extract tagged public key from the string
+  const match = trimmed.match(TAGGED_PUBLIC_KEY_PATTERN);
+  if (match) {
+    return CLPublicKey.fromHex(match[0]);
+  }
+  
+  throw new Error(
+    `Invalid public key format: "${trimmed}". Expected a 66-character hex string starting with 01, 02, or 03 (e.g., 02abc123...).`
+  );
 }
 
 export function safeJsonStringify(value: unknown, space?: number): string {
