@@ -22,14 +22,11 @@ Add the following environment variables to your `.env` file:
 
 ```env
 # Casper Node URL (testnet or mainnet)
-# Use public nodes (no API Key required)
-CASPER_NODE_URL=https://rpc.testnet.cspr.cloud:443/rpc
-# Or use other public nodes
-# CASPER_NODE_URL=https://node.testnet.casperlabs.org:7777/rpc
+CASPER_ENABLED=true
 
-# Optional: Default wallet configuration
-CASPER_PUBLIC_KEY=your_public_key_here
-CASPER_PRIVATE_KEY=your_private_key_here
+CASPER_NODE_URL=https://node.testnet.casper.network/rpc
+CASPER_RPC_URL=https://node.testnet.casper.network/rpc
+
 ```
 
 ### Network URLs
