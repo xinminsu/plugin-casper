@@ -1,4 +1,4 @@
-import { CLPublicKey } from 'casper-js-sdk';
+import { PublicKey } from 'casper-js-sdk';
 
 /**
  * Casper tagged public key patterns.
@@ -23,7 +23,7 @@ export function extractPublicKey(text: string): string | null {
   return match ? match[0] : null;
 }
 
-export function parseCasperPublicKey(publicKey: string): CLPublicKey {
+export function parseCasperPublicKey(publicKey: string): PublicKey {
   const trimmed = publicKey.trim();
 
   if (trimmed.startsWith('account-hash-')) {
@@ -34,17 +34,17 @@ export function parseCasperPublicKey(publicKey: string): CLPublicKey {
 
   // Tag-prefixed key (66 hex chars = 1 tag + 32 bytes).
   if (/^0[1-3][0-9a-fA-F]{64}$/.test(trimmed)) {
-    return CLPublicKey.fromHex(trimmed);
+    return PublicKey.fromHex(trimmed);
   }
 
   // 68-char extended form (1 tag + 33 bytes) accepted by the SDK.
   if (/^0[1-3][0-9a-fA-F]{66}$/.test(trimmed)) {
-    return CLPublicKey.fromHex(trimmed);
+    return PublicKey.fromHex(trimmed);
   }
 
   // 64-char raw key with no tag → assume Ed25519 (tag 02).
   if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
-    return CLPublicKey.fromHex(`02${trimmed}`);
+    return PublicKey.fromHex(`02${trimmed}`);
   }
 
   // Try to extract a tagged public key from the surrounding text.
@@ -53,7 +53,7 @@ export function parseCasperPublicKey(publicKey: string): CLPublicKey {
   // "Invalid public key" error if the input is genuinely malformed.
   const match = trimmed.match(TAGGED_PUBLIC_KEY_PATTERN);
   if (match) {
-    return CLPublicKey.fromHex(match[0]);
+    return PublicKey.fromHex(match[0]);
   }
 
   throw new Error(

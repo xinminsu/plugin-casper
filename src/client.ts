@@ -1,19 +1,25 @@
-import { CasperServiceByJsonRPC, DeployUtil, Keys, RuntimeArgs } from 'casper-js-sdk';
-import { HTTPTransport } from '@open-rpc/client-js';
+import {
+  RpcClient,
+  HttpHandler,
+  Deploy,
+  DeployHeader,
+  ExecutableDeployItem,
+  TransferDeployItem,
+  StoredContractByHash,
+  Args,
+  CLValue,
+  PrivateKey,
+  PublicKey,
+  KeyAlgorithm,
+  Timestamp,
+  Duration,
+} from 'casper-js-sdk';
 import { parseCasperPublicKey } from './utils';
 
 export interface CasperConfig {
   nodeUrl: string;
   chainName?: string;
   apiKey?: string;
-}
-
-class AuthenticatedCasperRpcClient extends CasperServiceByJsonRPC {
-  constructor(url: string, headers: Record<string, string>) {
-    super(url);
-    const transport = new HTTPTransport(url, { headers });
-    this.client.requestManager.transports = [transport];
-  }
 }
 
 export interface WalletInfo {
@@ -42,34 +48,31 @@ function extractBlockHeader(blockInfo: any): BlockHeader | null {
 }
 
 export class CasperClient {
-  private client: CasperServiceByJsonRPC;
+  private rpcClient: RpcClient;
   private config: CasperConfig;
 
   constructor(config: CasperConfig) {
     this.config = config;
 
+    const handler = new HttpHandler(config.nodeUrl);
     if (config.apiKey) {
-      this.client = new AuthenticatedCasperRpcClient(config.nodeUrl, {
-        Authorization: config.apiKey,
-      });
-    } else {
-      this.client = new CasperServiceByJsonRPC(config.nodeUrl);
+      handler.setCustomHeaders({ Authorization: config.apiKey });
     }
+    this.rpcClient = new RpcClient(handler);
   }
 
   /**
    * 生成新的钱包密钥对
    */
   generateWallet(): WalletInfo {
-    const keyPair = Keys.Ed25519.new();
-    // publicKey 是 CLPublicKey 类型，使用 toHex() 方法
-    const publicKeyHex = keyPair.publicKey.toHex(false); // false 表示不使用校验和
-    // privateKey 是 Uint8Array，转换为 hex 字符串
-    const privateKeyHex = Array.from(keyPair.privateKey)
-      .map(b => b.toString(16).padStart(2, '0'))
+    const privateKey = PrivateKey.generate(KeyAlgorithm.ED25519);
+    const publicKey = privateKey.publicKey;
+    const publicKeyHex = publicKey.toHex(false);
+    const privateKeyHex = Array.from(privateKey.toBytes())
+      .map((b: number) => b.toString(16).padStart(2, '0'))
       .join('');
-    const accountHash = keyPair.accountHex(false);
-    const address = `account-hash-${accountHash}`;
+    const accountHash = publicKey.accountHash();
+    const address = `account-hash-${Buffer.from(accountHash.toBytes()).toString('hex')}`;
 
     return {
       publicKey: publicKeyHex,
@@ -82,16 +85,15 @@ export class CasperClient {
    * 从私钥恢复钱包
    */
   restoreWallet(privateKeyHex: string): WalletInfo {
-    const privateKeyBytes = Buffer.from(privateKeyHex, 'hex');
-    const publicKeyBytes = Keys.Ed25519.privateToPublicKey(privateKeyBytes);
-    const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
-    
-    const publicKey = keyPair.publicKey.toHex(false);
-    const accountHash = keyPair.accountHex(false);
-    const address = `account-hash-${accountHash}`;
+    const privateKey = PrivateKey.fromHex(privateKeyHex, KeyAlgorithm.ED25519);
+    const publicKey = privateKey.publicKey;
+
+    const publicKeyHex = publicKey.toHex(false);
+    const accountHash = publicKey.accountHash();
+    const address = `account-hash-${Buffer.from(accountHash.toBytes()).toString('hex')}`;
 
     return {
-      publicKey,
+      publicKey: publicKeyHex,
       privateKey: privateKeyHex,
       address
     };
@@ -103,24 +105,28 @@ export class CasperClient {
   async getBalance(publicKey: string): Promise<string> {
     try {
       const clPublicKey = parseCasperPublicKey(publicKey);
-      
+
       // 获取状态根哈希
       const stateRootHash = await this.getStateRootHash();
-      
+
       if (!stateRootHash) {
         throw new Error('Failed to resolve Casper state root hash from latest block');
       }
-      
-      // 获取账户余额 URef
-      const balanceUref = await this.client.getAccountBalanceUrefByPublicKey(
-        stateRootHash,
-        clPublicKey
-      );
-      
+
+      // 获取账户信息以拿到 main purse URef
+      const accountInfo = await this.rpcClient.getAccountInfo(null, {
+        publicKey: clPublicKey,
+      } as any);
+
+      const mainPurse = accountInfo?.account?.mainPurse;
+      if (!mainPurse) {
+        throw new Error('Account not found or has no main purse');
+      }
+
       // 获取余额
-      const balance = await this.client.getAccountBalance(stateRootHash, balanceUref);
-      
-      return balance.toString();
+      const balance = await this.rpcClient.getBalanceByStateRootHash(mainPurse.toString(), stateRootHash);
+
+      return (balance.balanceValue as any).toString();
     } catch (error) {
       console.error('Error getting balance:', error);
       throw error;
@@ -138,40 +144,44 @@ export class CasperClient {
   ): Promise<string> {
     try {
       // 解析私钥
-      const privateKeyBytes = Buffer.from(fromPrivateKey, 'hex');
-      const publicKeyBytes = Keys.Ed25519.privateToPublicKey(privateKeyBytes);
-      const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
-      
+      const privateKey = PrivateKey.fromHex(fromPrivateKey, KeyAlgorithm.ED25519);
+      const publicKey = privateKey.publicKey;
+
       // 构建目标公钥
-      const targetCLPublicKey = parseCasperPublicKey(toPublicKey);
-      
+      const targetPublicKey = parseCasperPublicKey(toPublicKey);
+
       // 构建转账 session
-      const session = DeployUtil.ExecutableDeployItem.newTransfer(
-        amount,
-        targetCLPublicKey,
+      const transferItem = TransferDeployItem.newTransfer(
+        String(amount),
+        targetPublicKey,
         null,
         0
       );
-      
+
+      const session = new ExecutableDeployItem();
+      session.transfer = transferItem;
+
       // 构建支付
-      const payment = DeployUtil.standardPayment(paymentAmount);
-      
-      // 创建 deploy 参数
-      const deployParams = new DeployUtil.DeployParams(
-        keyPair.publicKey,
+      const payment = ExecutableDeployItem.standardPayment(String(paymentAmount));
+
+      // 创建 deploy header
+      const header = new DeployHeader(
         this.config.chainName || 'casper-test',
+        [],
         1,
-        1800000
+        new Timestamp(new Date()),
+        new Duration(1800000),
+        publicKey
       );
-      
+
       // 创建 deploy
-      const deploy = DeployUtil.makeDeploy(deployParams, session, payment);
-      
+      const deploy = Deploy.makeDeploy(header, payment, session);
+
       // 签名并发送
-      const signedDeploy = DeployUtil.signDeploy(deploy, keyPair);
-      const result = await this.client.deploy(signedDeploy);
-      
-      return result.deploy_hash;
+      deploy.sign(privateKey);
+      const result = await this.rpcClient.putDeploy(deploy);
+
+      return result.deployHash.toString();
     } catch (error) {
       console.error('Error transferring tokens:', error);
       throw error;
@@ -189,33 +199,35 @@ export class CasperClient {
     paymentAmount: number = 10000000000
   ): Promise<string> {
     try {
-      const privateKeyBytes = Buffer.from(privateKey, 'hex');
-      const publicKeyBytes = Keys.Ed25519.privateToPublicKey(privateKeyBytes);
-      const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
-      
+      const signingKey = PrivateKey.fromHex(privateKey, KeyAlgorithm.ED25519);
+      const publicKey = signingKey.publicKey;
+
       // 构建合约参数
-      const runtimeArgs = RuntimeArgs.fromMap(args);
-      
+      const argsMap = new Map<string, CLValue>();
+      for (const [key, value] of Object.entries(args)) {
+        argsMap.set(key, CLValue.newCLString(String(value)));
+      }
+      const runtimeArgs = new Args(argsMap);
+
       // 创建 session
-      const session = DeployUtil.ExecutableDeployItem.newModuleBytes(
-        wasmBytes,
-        runtimeArgs
-      );
-      
-      const payment = DeployUtil.standardPayment(paymentAmount);
-      
-      const deployParams = new DeployUtil.DeployParams(
-        keyPair.publicKey,
+      const session = ExecutableDeployItem.newModuleBytes(wasmBytes, runtimeArgs);
+
+      const payment = ExecutableDeployItem.standardPayment(String(paymentAmount));
+
+      const header = new DeployHeader(
         this.config.chainName || 'casper-test',
+        [],
         1,
-        1800000
+        new Timestamp(new Date()),
+        new Duration(1800000),
+        publicKey
       );
-      
-      const deploy = DeployUtil.makeDeploy(deployParams, session, payment);
-      const signedDeploy = DeployUtil.signDeploy(deploy, keyPair);
-      
-      const result = await this.client.deploy(signedDeploy);
-      return result.deploy_hash;
+
+      const deploy = Deploy.makeDeploy(header, payment, session);
+      deploy.sign(signingKey);
+
+      const result = await this.rpcClient.putDeploy(deploy);
+      return result.deployHash.toString();
     } catch (error) {
       console.error('Error deploying contract:', error);
       throw error;
@@ -233,33 +245,41 @@ export class CasperClient {
     paymentAmount: number = 2500000000
   ): Promise<string> {
     try {
-      const privateKeyBytes = Buffer.from(privateKey, 'hex');
-      const publicKeyBytes = Keys.Ed25519.privateToPublicKey(privateKeyBytes);
-      const keyPair = Keys.Ed25519.parseKeyPair(publicKeyBytes, privateKeyBytes);
-      
-      const runtimeArgs = RuntimeArgs.fromMap(args);
-      
+      const signingKey = PrivateKey.fromHex(privateKey, KeyAlgorithm.ED25519);
+      const publicKey = signingKey.publicKey;
+
+      const argsMap = new Map<string, CLValue>();
+      for (const [key, value] of Object.entries(args)) {
+        argsMap.set(key, CLValue.newCLString(String(value)));
+      }
+      const runtimeArgs = new Args(argsMap);
+
       const contractHashBytes = Buffer.from(contractHash.replace('0x', ''), 'hex');
-      const session = DeployUtil.ExecutableDeployItem.newStoredContractByHash(
-        contractHashBytes,
+      const storedContract = new StoredContractByHash(
+        contractHashBytes as any,
         entryPoint,
         runtimeArgs
       );
-      
-      const payment = DeployUtil.standardPayment(paymentAmount);
-      
-      const deployParams = new DeployUtil.DeployParams(
-        keyPair.publicKey,
+
+      const session = new ExecutableDeployItem();
+      session.storedContractByHash = storedContract;
+
+      const payment = ExecutableDeployItem.standardPayment(String(paymentAmount));
+
+      const header = new DeployHeader(
         this.config.chainName || 'casper-test',
+        [],
         1,
-        1800000
+        new Timestamp(new Date()),
+        new Duration(1800000),
+        publicKey
       );
-      
-      const deploy = DeployUtil.makeDeploy(deployParams, session, payment);
-      const signedDeploy = DeployUtil.signDeploy(deploy, keyPair);
-      
-      const result = await this.client.deploy(signedDeploy);
-      return result.deploy_hash;
+
+      const deploy = Deploy.makeDeploy(header, payment, session);
+      deploy.sign(signingKey);
+
+      const result = await this.rpcClient.putDeploy(deploy);
+      return result.deployHash.toString();
     } catch (error) {
       console.error('Error calling contract:', error);
       throw error;
@@ -271,7 +291,7 @@ export class CasperClient {
    */
   async getDeployStatus(deployHash: string): Promise<any> {
     try {
-      const deployInfo = await this.client.getDeployInfo(deployHash);
+      const deployInfo = await this.rpcClient.getDeploy(deployHash);
       return deployInfo;
     } catch (error) {
       console.error('Error getting deploy status:', error);
@@ -284,7 +304,7 @@ export class CasperClient {
    */
   async getLatestBlock(): Promise<any> {
     try {
-      const blockInfo = await this.client.getLatestBlockInfo();
+      const blockInfo = await this.rpcClient.getLatestBlock();
       const header = extractBlockHeader(blockInfo);
       return {
         stateRootHash: header?.state_root_hash,
@@ -301,7 +321,7 @@ export class CasperClient {
    * 获取状态根哈希
    */
   private async getStateRootHash(): Promise<string> {
-    const blockInfo = await this.client.getLatestBlockInfo();
-    return extractBlockHeader(blockInfo)?.state_root_hash || '';
+    const result = await this.rpcClient.getStateRootHashLatest();
+    return result.stateRootHash?.toString() || '';
   }
 }

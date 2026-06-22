@@ -1,5 +1,20 @@
 import { Plugin } from '@elizaos/core';
-import { generateWalletAction, getBalanceAction, transferAction, getDeployStatusAction } from './actions';
+import {
+  generateWalletAction,
+  getBalanceAction,
+  transferAction,
+  getDeployStatusAction,
+  networkQueryAction,
+  accountReadAction,
+  tokenReadAction,
+  stakingReadAction,
+  dappReadAction,
+  nativeWriteAction,
+  tokenWriteAction,
+  nftWriteAction,
+  stakingWriteAction,
+  defiWriteAction
+} from './actions';
 import { casperNetworkProvider, casperWalletProvider, casperGasProvider } from './providers';
 
 /**
@@ -16,7 +31,17 @@ export const casperPlugin: Plugin = {
     generateWalletAction,
     getBalanceAction,
     transferAction,
-    getDeployStatusAction
+    getDeployStatusAction,
+    networkQueryAction,
+    accountReadAction,
+    tokenReadAction,
+    stakingReadAction,
+    dappReadAction,
+    nativeWriteAction,
+    tokenWriteAction,
+    nftWriteAction,
+    stakingWriteAction,
+    defiWriteAction
   ],
   providers: [
     casperNetworkProvider,

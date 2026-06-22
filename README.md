@@ -2,14 +2,92 @@
 
 Casper blockchain plugin for Eliza AI agent framework. This plugin enables AI agents to interact with the Casper blockchain network, including wallet management, token transfers, smart contract deployment, and blockchain data queries.
 
-## Features
+## ✨ Features
 
-- 🏦 **Wallet Management**: Generate new wallets and restore existing ones
-- 💰 **Balance Queries**: Check CSPR token balances for any account
-- 💸 **Token Transfers**: Send CSPR tokens between accounts
-- 📊 **Transaction Status**: Monitor transaction status by deploy hash
-- 🔗 **Smart Contracts**: Deploy and call smart contracts (WASM)
-- 🌐 **Network Info**: Query latest block and network status
+### 📖 Read Queries (读取查询)
+
+#### 🌐 Network & Blockchain Metadata
+- Query node status, network peers, and chainspec
+- Query block information by hash or height
+- Query deploy/transaction details
+- Query block transfers and state root hash
+
+#### 👤 Account, Balance & Gas
+- Query CSPR balance for any wallet address (Casper public key, account hash, or Ethereum-style)
+- Query account info (associated keys, thresholds, named keys)
+- Query purse balance by URef (with full proof details)
+- Query global state by key and path
+
+#### 📋 Contract & Dictionary
+- Query contract metadata (hash, version, entry points)
+- List all callable entry points with argument types
+- Query dictionary items by URef, by account, or by contract
+- Query stored state items by key and path
+- List all named keys of a contract
+
+#### 🪙 CEP-18 / CEP-47 / CEP-78 Tokens
+- CEP-18: total supply, balance of, allowance, token metadata (name/symbol/decimals)
+- CEP-47/78: total supply, owner of, tokens of owner, metadata, approved spender
+- CEP-78: max supply limit, batch owner query
+
+#### ⚖️ Staking & Validators
+- Query all active validators for current era
+- Query single validator detail (stake, commission rate, delegators)
+- Query delegation records for a delegator
+- Query full auction state and validator set changes
+- Query era summary with reward allocations
+
+#### 🔧 General DApp
+- Counter: query current count value
+- AMM: pool reserves, LP balance, staking info
+- Governance: all proposals, proposal detail, vote record
+- RWA: asset record query
+- DEX: open orders query
+
+### ✏️ Write Operations (链上写入)
+
+#### 💸 Native CSPR
+- Transfer CSPR to another account
+- Create temporary purses
+- Add/remove associated keys (multi-sig setup)
+- Set action thresholds for account security
+- Bind named keys for contract/token references
+
+#### 🪙 CEP-18 Fungible Tokens
+- Mint / Burn tokens
+- Transfer tokens between accounts
+- Approve / Increase / Decrease allowance
+- Transfer from (approved spender transfers tokens)
+
+#### 🖼️ CEP-47 / CEP-78 NFT
+- Mint single NFT / Batch mint copies
+- Burn single / Batch burn NFTs
+- Transfer / Batch transfer NFTs
+- Approve NFT for spender
+- Update NFT metadata (CEP-78)
+- Set NFT contract admin (CEP-78)
+
+#### ⚖️ Staking / Consensus
+- Bond (self-stake to become validator)
+- Delegate CSPR to a validator
+- Unbond self-staked CSPR
+- Undelegate from a validator
+- Withdraw staking rewards
+- Set validator commission rate
+
+#### 📈 DeFi AMM / Liquidity
+- Swap tokens on AMM DEX
+- Add / Remove liquidity to pools
+- Stake LP tokens for farming rewards
+- Claim farming rewards
+- Create / Cancel limit orders
+
+#### 🔧 General DApp
+- Counter increment / decrement
+- Dictionary key-value put / remove
+- Governance: Create proposal, cast vote, execute proposal
+- RWA asset record saving
+- Generic contract call by hash
 
 ## Installation
 
@@ -60,66 +138,30 @@ const agent = new Agent({
 
 ### Available Actions
 
-#### 1. Generate Wallet
+The plugin registers **14 actions** that AI agents can invoke via natural language:
 
-Create a new Casper wallet with public/private key pair.
+#### Core Actions
 
-**Example:**
-```
-User: Create a new Casper wallet
-Agent: I'll generate a new Casper wallet for you...
+1. **GENERATE_CASPER_WALLET** — Generate a new Casper wallet with public/private key pair
+2. **GET_CASPER_BALANCE** — Check CSPR token balance of a Casper account
+3. **TRANSFER_CASPER_TOKENS** — Transfer CSPR tokens to another account
+4. **GET_DEPLOY_STATUS** — Check transaction status by deploy hash
 
-📍 Address: account-hash-xxx
-🔑 Public Key: 02a1b2c3d4e5f6...
-🔐 Private Key: xxxxx
+#### Read Query Actions
 
-⚠️ IMPORTANT: Store your private key securely! Never share it with anyone.
-```
+5. **CASPER_NETWORK_QUERY** — Query node status, peers, blocks, deploys, era summaries, transfers, state root hash, chainspec, and validator changes
+6. **CASPER_ACCOUNT_READ** — Query account info, named keys, purse balance, contract info, entry points, dictionary items, and global state
+7. **CASPER_TOKEN_READ** — Query CEP-18 (total supply, balance, allowance, metadata) and CEP-47/78 NFT (owner of, tokens of, metadata, approved, max supply, batch owners)
+8. **CASPER_STAKING_READ** — Query era validators, validator details, delegation info, auction state, validator changes, and era summaries
+9. **CASPER_DAPP_READ** — Query counter values, AMM reserves/LP balance/stake info, governance proposals/vote records, RWA asset records, and DEX open orders
 
-#### 2. Check Balance
+#### Write Operation Actions
 
-Query the CSPR balance of a Casper account.
-
-**Example:**
-```
-User: Check balance for 02a1b2c3d4e5f6...
-Agent: Let me check the balance...
-
-💰 Balance for 02a1b2c3d4e5f6...:
-100.500000000 CSPR
-```
-
-#### 3. Transfer Tokens
-
-Send CSPR tokens to another account.
-
-**Example:**
-```
-User: Send 5 CSPR to 02a1b2c3d4e5f6...
-Agent: I'll initiate the transfer...
-
-✅ Transfer initiated!
-
-Amount: 5 CSPR
-To: 02a1b2c3d4e5f6...
-Deploy Hash: abc123def456...
-
-You can check the transaction status using the deploy hash.
-```
-
-#### 4. Check Transaction Status
-
-Monitor the status of a transaction by its deploy hash.
-
-**Example:**
-```
-User: Check status of deploy abc123def456...
-Agent: Let me check the transaction status...
-
-📊 Transaction Status:
-Deploy Hash: abc123def456...
-Status: { ... }
-```
+10. **CASPER_NATIVE_WRITE** — Create purses, add/remove associated keys, set action thresholds, put named keys
+11. **CASPER_TOKEN_WRITE** — CEP-18 mint/burn/transfer/approve/increase-decrease allowance/transfer-from
+12. **CASPER_NFT_WRITE** — CEP-47 mint/burn/transfer/approve + CEP-78 set metadata/batch transfer/batch burn/set admin
+13. **CASPER_STAKING_WRITE** — Bond/delegate/unbond/undelegate/withdraw rewards/set commission rate
+14. **CASPER_DEFI_WRITE** — AMM swap/add-remove liquidity/stake LP/claim reward, DEX create-cancel order, counter inc/dec, dictionary put/remove, governance proposals, RWA asset records, generic contract calls
 
 ### Providers
 
