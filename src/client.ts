@@ -47,6 +47,10 @@ function extractBlockHeader(blockInfo: any): BlockHeader | null {
   return null;
 }
 
+function formatPurseUref(purse: string): string {
+  return purse.startsWith('uref-') ? purse : `uref-${purse}`;
+}
+
 export class CasperClient {
   private rpcClient: RpcClient;
   private config: CasperConfig;
@@ -106,14 +110,6 @@ export class CasperClient {
     try {
       const clPublicKey = parseCasperPublicKey(publicKey);
 
-      // 获取状态根哈希
-      const stateRootHash = await this.getStateRootHash();
-
-      if (!stateRootHash) {
-        throw new Error('Failed to resolve Casper state root hash from latest block');
-      }
-
-      // 获取账户信息以拿到 main purse URef
       const accountInfo = await this.rpcClient.getAccountInfo(null, {
         publicKey: clPublicKey,
       } as any);
@@ -123,10 +119,10 @@ export class CasperClient {
         throw new Error('Account not found or has no main purse');
       }
 
-      // 获取余额
-      const balance = await this.rpcClient.getBalanceByStateRootHash(mainPurse.toString(), stateRootHash);
+      const purseUref = formatPurseUref(mainPurse.toString());
+      const balance = await this.rpcClient.getLatestBalance(purseUref);
 
-      return (balance.balanceValue as any).toString();
+      return balance.balanceValue.toString();
     } catch (error) {
       console.error('Error getting balance:', error);
       throw error;
