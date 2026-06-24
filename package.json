@@ -1,6 +1,6 @@
 {
   "name": "@suxinmin/plugin-casper",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Casper blockchain plugin for Eliza AI agent framework — wallet, RPC reads (account/contract/token/NFT/staking/DeFi), network queries, and CEP-18/CEP-47/CEP-78/staking/DeFi write operations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
