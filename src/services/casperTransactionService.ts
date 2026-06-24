@@ -16,7 +16,11 @@ import {
   Duration,
   URef,
   Hash,
+  NativeTransferBuilder,
+  HttpHandler,
+  RpcClient,
 } from 'casper-js-sdk';
+import { parseCasperPublicKey } from '../utils';
 /**
  * Casper transaction service.
  *
@@ -29,6 +33,10 @@ import {
 const DEFAULT_TTL_MS = 1800000;
 // Default gas price
 const DEFAULT_GAS_PRICE = 1;
+// Standard native transfer payment on Casper (2.5 CSPR in motes)
+const STANDARD_TRANSFER_PAYMENT = 2_500_000_000;
+// Minimum transfer amount enforced by Casper 2.0 for many transfers
+const MIN_TRANSFER_MOTES = 2_500_000_000n;
 
 let rpcUrl = 'https://node.testnet.casper.network/rpc';
 let apiKey: string | undefined;
@@ -36,15 +44,40 @@ let chainName = 'casper-test';
 
 let configuredPemKey: string | undefined;
 let configuredHexKey: string | undefined;
-let configuredAlgorithm: string = 'ed25519';
+let configuredAlgorithm: string | undefined;
 
 let cachedPrivateKey: PrivateKey | null = null;
 let cachedPublicKey: PublicKey | null = null;
+let cachedRpcClient: RpcClient | null = null;
 
 const logger = {
   info: (msg: string) => console.log(`[casper-tx] ${msg}`),
   error: (msg: string) => console.error(`[casper-tx] ${msg}`),
 };
+
+export interface SigningWalletInfo {
+  publicKey: string;
+  address: string;
+}
+
+/** Normalize PEM stored in .env (quoted strings, literal \\n line breaks). */
+export function normalizeSigningKeyPem(pem: string | undefined): string | undefined {
+  if (!pem) return undefined;
+
+  let normalized = pem.trim();
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  if (normalized.includes('\\n')) {
+    normalized = normalized.replace(/\\n/g, '\n');
+  }
+
+  return normalized.trim() || undefined;
+}
 
 /**
  * Inject signer + network settings from runtime settings. Called by
@@ -61,17 +94,52 @@ export function configureSigner(opts: {
   rpcUrl = opts.rpcUrl || rpcUrl;
   apiKey = opts.apiKey;
   chainName = opts.chainName || 'casper-test';
-  configuredPemKey = opts.signingKeyPem;
-  configuredHexKey = opts.signingKeyHex;
-  configuredAlgorithm = (opts.keyAlgorithm || 'ed25519').toLowerCase();
+  configuredPemKey = normalizeSigningKeyPem(opts.signingKeyPem);
+  configuredHexKey = opts.signingKeyHex?.trim() || undefined;
+  configuredAlgorithm = opts.keyAlgorithm?.trim().toLowerCase() || undefined;
   // Invalidate cached key when configuration changes.
   cachedPrivateKey = null;
   cachedPublicKey = null;
+  cachedRpcClient = null;
+}
+
+function getRpcClient(): RpcClient {
+  if (!cachedRpcClient) {
+    const handler = new HttpHandler(rpcUrl);
+    if (apiKey) {
+      handler.setCustomHeaders({ Authorization: apiKey });
+    }
+    cachedRpcClient = new RpcClient(handler);
+  }
+  return cachedRpcClient;
+}
+
+function formatRpcError(error: any): string {
+  const code = error?.code ?? error?.sourceErr?.code;
+  const message = error?.message ?? error?.sourceErr?.message ?? String(error);
+  const data = error?.sourceErr?.data ?? error?.data;
+  if (data) {
+    return `RPC Error: ${message} (code: ${code}) — ${data}`;
+  }
+  return `RPC Error: ${message}${code !== undefined ? ` (code: ${code})` : ''}`;
 }
 
 /** Whether a signing key has been configured. */
 export function isSigningKeyConfigured(): boolean {
   return !!(configuredPemKey || configuredHexKey);
+}
+
+function resolveKeyAlgorithmFromPem(pem: string): KeyAlgorithm {
+  if (configuredAlgorithm === 'secp256k1') return KeyAlgorithm.SECP256K1;
+  if (configuredAlgorithm === 'ed25519') return KeyAlgorithm.ED25519;
+  // Casper secp256k1 keys use SEC1 "EC PRIVATE KEY"; Ed25519 uses PKCS#8 "PRIVATE KEY".
+  if (pem.includes('BEGIN EC PRIVATE KEY')) return KeyAlgorithm.SECP256K1;
+  return KeyAlgorithm.ED25519;
+}
+
+function resolveKeyAlgorithmFromHex(): KeyAlgorithm {
+  if (configuredAlgorithm === 'secp256k1') return KeyAlgorithm.SECP256K1;
+  return KeyAlgorithm.ED25519;
 }
 
 // ============================================================
@@ -85,13 +153,14 @@ export function isSigningKeyConfigured(): boolean {
 export function getSigningKey(): PrivateKey {
   if (cachedPrivateKey) return cachedPrivateKey;
 
-  const keyAlgorithm =
-    configuredAlgorithm === 'secp256k1' ? KeyAlgorithm.SECP256K1 : KeyAlgorithm.ED25519;
-
   if (configuredPemKey) {
+    const keyAlgorithm = resolveKeyAlgorithmFromPem(configuredPemKey);
     cachedPrivateKey = PrivateKey.fromPem(configuredPemKey, keyAlgorithm);
   } else if (configuredHexKey) {
-    cachedPrivateKey = PrivateKey.fromHex(configuredHexKey, keyAlgorithm);
+    cachedPrivateKey = PrivateKey.fromHex(
+      configuredHexKey,
+      resolveKeyAlgorithmFromHex()
+    );
   } else {
     throw new Error(
       'No signing key configured. Set CASPER_SIGNING_KEY_HEX or CASPER_SIGNING_KEY_PEM in environment variables.\n' +
@@ -110,6 +179,16 @@ export function getSigningPublicKey(): PublicKey {
     getSigningKey();
   }
   return cachedPublicKey!;
+}
+
+/** Derive public key and account-hash address from the configured signing key. */
+export function getSigningWalletInfo(): SigningWalletInfo {
+  const publicKey = getSigningPublicKey();
+  const accountHash = publicKey.accountHash();
+  return {
+    publicKey: publicKey.toHex(),
+    address: `account-hash-${Buffer.from(accountHash.toBytes()).toString('hex')}`,
+  };
 }
 
 // ============================================================
@@ -243,28 +322,55 @@ export async function signAndSubmitDeploy(
 // 1. Native CSPR Operations
 // ============================================================
 
-/** Transfer CSPR to another account. */
+/** Transfer CSPR to another account (Casper 2.0 transaction model). */
 export async function transferCspr(
   targetPublicKey: string,
   amount: string,
   transferId?: number,
   sourcePurse?: string
 ): Promise<{ deployHash: string; result: any }> {
-  const targetPubKey = PublicKey.fromHex(targetPublicKey);
-  const amountMotes = ethers.parseUnits(amount, 9).toString();
-  const id = transferId ?? Math.floor(Math.random() * 1000000);
-
-  let sourceUref: URef | null = null;
   if (sourcePurse) {
-    sourceUref = URef.fromString(sourcePurse);
+    throw new Error(
+      'Transfer from a custom source purse is not supported with Casper 2.0 transactions yet.'
+    );
   }
 
-  const transferItem = TransferDeployItem.newTransfer(amountMotes, targetPubKey, sourceUref, id);
+  const targetPubKey = parseCasperPublicKey(targetPublicKey);
+  const amountMotes = ethers.parseUnits(amount, 9).toString();
+  const amountMotesBigInt = BigInt(amountMotes);
 
-  const session = new ExecutableDeployItem();
-  session.transfer = transferItem;
+  if (amountMotesBigInt < MIN_TRANSFER_MOTES) {
+    throw new Error(
+      `Transfer amount must be at least 2.5 CSPR. Received ${amount} CSPR.`
+    );
+  }
 
-  return signAndSubmitDeploy(session);
+  const signingKey = getSigningKey();
+  const id = transferId ?? Date.now();
+
+  const transaction = new NativeTransferBuilder()
+    .from(signingKey.publicKey)
+    .target(targetPubKey)
+    .amount(amountMotes)
+    .id(id)
+    .chainName(chainName)
+    .payment(STANDARD_TRANSFER_PAYMENT)
+    .ttl(DEFAULT_TTL_MS)
+    .build();
+
+  transaction.sign(signingKey);
+
+  try {
+    const putResult = await getRpcClient().putTransaction(transaction);
+    const transactionHash =
+      putResult.transactionHash?.toString?.() ?? String(putResult.transactionHash);
+
+    logger.info(`Transfer submitted: ${transactionHash}`);
+
+    return { deployHash: transactionHash, result: putResult };
+  } catch (error) {
+    throw new Error(formatRpcError(error));
+  }
 }
 
 /**

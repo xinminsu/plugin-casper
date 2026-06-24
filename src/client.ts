@@ -13,6 +13,7 @@ import {
   KeyAlgorithm,
   Timestamp,
   Duration,
+  NativeTransferBuilder,
 } from 'casper-js-sdk';
 import { parseCasperPublicKey } from './utils';
 
@@ -139,45 +140,33 @@ export class CasperClient {
     paymentAmount: number = 2500000000
   ): Promise<string> {
     try {
-      // 解析私钥
-      const privateKey = PrivateKey.fromHex(fromPrivateKey, KeyAlgorithm.ED25519);
-      const publicKey = privateKey.publicKey;
+      let privateKey: PrivateKey;
+      try {
+        privateKey = PrivateKey.fromHex(fromPrivateKey, KeyAlgorithm.ED25519);
+      } catch {
+        privateKey = PrivateKey.fromHex(fromPrivateKey, KeyAlgorithm.SECP256K1);
+      }
 
-      // 构建目标公钥
       const targetPublicKey = parseCasperPublicKey(toPublicKey);
+      const amountMotes = String(amount);
 
-      // 构建转账 session
-      const transferItem = TransferDeployItem.newTransfer(
-        String(amount),
-        targetPublicKey,
-        null,
-        0
-      );
+      if (BigInt(amountMotes) < 2_500_000_000n) {
+        throw new Error('Transfer amount must be at least 2.5 CSPR (2,500,000,000 motes).');
+      }
 
-      const session = new ExecutableDeployItem();
-      session.transfer = transferItem;
+      const transaction = new NativeTransferBuilder()
+        .from(privateKey.publicKey)
+        .target(targetPublicKey)
+        .amount(amountMotes)
+        .id(Date.now())
+        .chainName(this.config.chainName || 'casper-test')
+        .payment(paymentAmount)
+        .ttl(1800000)
+        .build();
 
-      // 构建支付
-      const payment = ExecutableDeployItem.standardPayment(String(paymentAmount));
-
-      // 创建 deploy header
-      const header = new DeployHeader(
-        this.config.chainName || 'casper-test',
-        [],
-        1,
-        new Timestamp(new Date()),
-        new Duration(1800000),
-        publicKey
-      );
-
-      // 创建 deploy
-      const deploy = Deploy.makeDeploy(header, payment, session);
-
-      // 签名并发送
-      deploy.sign(privateKey);
-      const result = await this.rpcClient.putDeploy(deploy);
-
-      return result.deployHash.toString();
+      transaction.sign(privateKey);
+      const result = await this.rpcClient.putTransaction(transaction);
+      return result.transactionHash.toString();
     } catch (error) {
       console.error('Error transferring tokens:', error);
       throw error;

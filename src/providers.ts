@@ -1,5 +1,5 @@
 import { IAgentRuntime, Memory, Provider, State, ProviderResult } from '@elizaos/core';
-import { createCasperClient, getCasperConfigFromRuntime } from './config';
+import { createCasperClient, getCasperConfigFromRuntime, getConfiguredWalletInfo } from './config';
 
 /**
  * Casper 网络信息 Provider
@@ -34,22 +34,24 @@ export const casperWalletProvider: Provider = {
   name: 'casperWallet',
   get: async (runtime: IAgentRuntime, message: Memory, state?: State): Promise<ProviderResult> => {
     try {
-      const publicKey = runtime.getSetting('CASPER_PUBLIC_KEY');
-      if (!publicKey) {
+      const wallet = getConfiguredWalletInfo(runtime);
+      if (!wallet) {
         return {
-          text: 'No Casper wallet configured. Set CASPER_PUBLIC_KEY to view wallet info.'
+          text:
+            'No Casper wallet configured. Set CASPER_PUBLIC_KEY or CASPER_SIGNING_KEY_PEM / CASPER_SIGNING_KEY_HEX to view wallet info.',
         };
       }
-      
+
       const client = createCasperClient(runtime);
-      
-      const balance = await client.getBalance(publicKey as string);
+
+      const balance = await client.getBalance(wallet.publicKey);
       const balanceInCSPR = parseInt(balance) / 1000000000;
-      
+
       return {
         text: `💼 Your Casper Wallet:
-Address: ${publicKey}
-Balance: ${balanceInCSPR.toFixed(9)} CSPR`
+Account: ${wallet.address}
+Public Key: ${wallet.publicKey}
+Balance: ${balanceInCSPR.toFixed(9)} CSPR`,
       };
     } catch (error) {
       return {

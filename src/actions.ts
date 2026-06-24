@@ -1,5 +1,6 @@
 import { Action, ActionExample, HandlerCallback, IAgentRuntime, Memory, State } from '@elizaos/core';
-import { createCasperClient } from './config';
+import { configureCasperServices, createCasperClient, getCasperSetting } from './config';
+import { transferCspr, isSigningKeyConfigured } from './services/casperTransactionService';
 import { extractPublicKey, safeJsonStringify, toSerializable } from './utils';
 
 /**
@@ -144,17 +145,18 @@ export const transferAction: Action = {
     callback?: HandlerCallback
   ) => {
     try {
-      const client = createCasperClient(runtime);
-      
-      const privateKey = runtime.getSetting('CASPER_PRIVATE_KEY') as string;
-      if (!privateKey) {
+      configureCasperServices(runtime);
+
+      const privateKey = getCasperSetting(runtime, 'CASPER_PRIVATE_KEY');
+      if (!isSigningKeyConfigured() && !privateKey) {
         callback!({
-          text: 'Private key not configured. Please set CASPER_PRIVATE_KEY in environment variables.',
-          content: { error: 'No private key configured' }
+          text:
+            'No signing key configured. Set CASPER_SIGNING_KEY_PEM, CASPER_SIGNING_KEY_HEX, or CASPER_PRIVATE_KEY in environment variables.',
+          content: { error: 'No signing key configured' },
         });
         return;
       }
-      
+
       // 从消息中提取接收方和金额
       const { toPublicKey, amount } = parseTransferDetails(message.content.text || '');
       
@@ -165,13 +167,21 @@ export const transferAction: Action = {
         });
         return;
       }
-      
-      const deployHash = await client.transfer(privateKey, toPublicKey, amount * 1000000000);
+
+      let deployHash: string;
+      if (isSigningKeyConfigured()) {
+        const result = await transferCspr(toPublicKey, String(amount));
+        deployHash = result.deployHash;
+      } else {
+        const client = createCasperClient(runtime);
+        deployHash = await client.transfer(privateKey!, toPublicKey, amount * 1000000000);
+      }
       
       callback!({
-        text: `✅ Transfer initiated!\n\nAmount: ${amount} CSPR\nTo: ${toPublicKey}\nDeploy Hash: ${deployHash}\n\nYou can check the transaction status using the deploy hash.`,
+        text: `✅ Transfer initiated!\n\nAmount: ${amount} CSPR\nTo: ${toPublicKey}\nTransaction Hash: ${deployHash}\n\nYou can check the transaction status using this hash.`,
         content: {
           deployHash,
+          transactionHash: deployHash,
           amount,
           recipient: toPublicKey
         }
